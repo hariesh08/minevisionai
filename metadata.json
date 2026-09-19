@@ -1,0 +1,6 @@
+{
+  "name": "MineGuard AI",
+  "description": "Smart Coal Mine Governance Platform - AI-powered safety monitoring, hazard detection, compliance tracking, and environmental risk analysis.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
