@@ -1,10 +1,10 @@
 <div align="center">
-  <h1>🛡️ MineVision AI</h1>
+  <h1>🛡️ MineGuard AI</h1>
   <h3>Smart Mine Governance & Compliance Platform</h3>
 </div>
 
 ## 📌 Overview
-**MineVision AI** is a comprehensive Smart Mine Governance & Compliance platform. It goes beyond standard CCTV monitoring by understanding the compliance impact of detected events, predicting risks, alerting responsible officers, tracking corrective actions, and generating auditable records. 
+**MineGuard AI** is a comprehensive Smart Mine Governance & Compliance platform. It goes beyond standard CCTV monitoring by understanding the compliance impact of detected events, predicting risks, alerting responsible officers, tracking corrective actions, and generating auditable records. 
 
 Our core identity is built on a complete closed-loop compliance system: 
 **`Observe → Detect → Understand → Predict → Alert → Act → Verify → Record`**
