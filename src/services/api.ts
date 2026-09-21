@@ -1,5 +1,5 @@
 /**
- * MineVision AI - Service Layer for API Communication
+ * MineGuard AI - Service Layer for API Communication
  * Prepared for future integration with Python Flask backend,
  * Coal India public environmental feeds, DGMS safety records,
  * and Computer Vision telemetry endpoints.

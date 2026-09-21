@@ -9,6 +9,7 @@ import {
   Layers,
   CheckCircle2,
   Eye,
+  RefreshCw,
 } from 'lucide-react';
 import * as LNamespace from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -32,11 +33,21 @@ export interface MineZoneMapProps {
    Zone polygons from mockData are stored as fractional (0-100) map
    coordinates, so they are re-projected onto these real-world bounds. */
 const MAP_CENTER: [number, number] = [24.12, 82.682];
+/* Fractional (0-100) mock zone coordinates are re-projected onto fixed
+   real-world degrees around the anchor. Fixed coordinates keep polygons
+   locked to the satellite imagery no matter how the dashboard reflows. */
+const SPAN_LAT = 0.042;
+const SPAN_LNG = 0.072;
 const INITIAL_ZOOM = 14;
+const MAX_FIT_ZOOM = 15;
 
 /* Esri World Imagery is a public tile service that needs NO API key.
-   It is the preferred provider for the satellite layer. */
-const TILE_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+   Host aliases are rotated for resilience when a tile host is slow. */
+const SATELLITE_SOURCES = [
+  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  'https://basemaps.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+];
 const TILE_ATTRIBUTION =
   '&copy; Esri, Maxar, Earthstar Geographics &copy; GIS User Community';
 
@@ -60,6 +71,17 @@ const STATUS_SHORT: Record<string, string> = {
   'Environmental Warning': 'Env. Warning',
 };
 
+type SatStatus = 'connecting' | 'live' | 'offline';
+
+/* Convert a fractional (0-100) map coordinate to fixed lat/lng degrees
+   around the mine anchor (Singrauli coal belt, India). */
+function toLatLng([x, y]: [number, number]): [number, number] {
+  return [
+    MAP_CENTER[0] + (y / 100 - 0.5) * SPAN_LAT,
+    MAP_CENTER[1] + (x / 100 - 0.5) * SPAN_LNG,
+  ];
+}
+
 export const MineZoneMap: React.FC<MineZoneMapProps> = ({
   onSelectZone,
   onOpenCCTV,
@@ -67,17 +89,20 @@ export const MineZoneMap: React.FC<MineZoneMapProps> = ({
 }) => {
   const [selectedZone, setSelectedZone] = useState<MineZone | null>(null);
   const [activeHoverZone, setActiveHoverZone] = useState<MineZone | null>(null);
-  /* 'satellite' = live Leaflet imagery; 'demo' = local fallback render */
-  const [mode, setMode] = useState<'satellite' | 'demo'>('satellite');
-  const [demoZoom, setDemoZoom] = useState(1);
+  const [satStatus, setSatStatus] = useState<SatStatus>('connecting');
   const { time, formattedTimeWithSeconds } = useRealTime();
 
   const cardRef = useRef<HTMLDivElement>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<L.Map | null>(null);
+  const tileLayerRef = useRef<L.TileLayer | null>(null);
+  const tileTimerRef = useRef(0);
+  const loadedRef = useRef(false);
+  const failedRef = useRef(0);
+  const sourceIdxRef = useRef(0);
+  const homeViewRef = useRef<{ center: L.LatLng; zoom: number } | null>(null);
   const zoneLayerRef = useRef<L.Polygon[]>([]);
   const labelLayerRef = useRef<L.LayerGroup | null>(null);
-  const zoneBoundsRef = useRef<L.LatLngBounds | null>(null);
 
   /* Kept in a ref so Leaflet event handlers always read the latest
      search term without being re-bound. */
@@ -85,30 +110,21 @@ export const MineZoneMap: React.FC<MineZoneMapProps> = ({
   searchStateRef.current = buildSearchState(searchQuery);
 
   const handleZoomIn = () => {
-    const map = leafletMapRef.current;
-    if (mode === 'satellite' && map) {
-      map.zoomIn();
-      return;
-    }
-    setDemoZoom((prev) => Math.min(prev + 0.25, 2));
+    leafletMapRef.current?.zoomIn();
   };
 
   const handleZoomOut = () => {
-    const map = leafletMapRef.current;
-    if (mode === 'satellite' && map) {
-      map.zoomOut();
-      return;
-    }
-    setDemoZoom((prev) => Math.max(prev - 0.25, 0.75));
+    leafletMapRef.current?.zoomOut();
   };
 
   const handleResetView = () => {
     const map = leafletMapRef.current;
-    if (mode === 'satellite' && map) {
+    if (!map) return;
+    if (homeViewRef.current) {
+      map.setView(homeViewRef.current.center, homeViewRef.current.zoom);
+    } else {
       map.setView(MAP_CENTER, INITIAL_ZOOM);
-      return;
     }
-    setDemoZoom(1);
   };
 
   const handleToggleFullscreen = () => {
@@ -127,12 +143,69 @@ export const MineZoneMap: React.FC<MineZoneMapProps> = ({
   };
 
   /* ---------------------------------------------------------------
-     Satellite mode: init a Leaflet map once. The map re-projects the
-     existing zone polygons onto the current viewport bounds so labels
-     and polygons stay aligned with the imagery.
+     Satellite imagery (Esri World Imagery, no API key) is the only
+     backdrop. Zones are projected to fixed coordinates and always
+     remain interactive, hoverable and clickable.
      --------------------------------------------------------------- */
+  function attachTiles() {
+    const map = leafletMapRef.current;
+    if (!map) return;
+    window.clearTimeout(tileTimerRef.current);
+    if (tileLayerRef.current) tileLayerRef.current.remove();
+    tileLayerRef.current = null;
+
+    const url = SATELLITE_SOURCES[sourceIdxRef.current % SATELLITE_SOURCES.length];
+    const layer = L.tileLayer(url, {
+      maxZoom: 18,
+      maxNativeZoom: 17,
+      attribution: TILE_ATTRIBUTION,
+      crossOrigin: true,
+    });
+    tileLayerRef.current = layer;
+
+    layer.on('tileload', () => {
+      loadedRef.current = true;
+      failedRef.current = 0;
+      setSatStatus('live');
+    });
+    layer.on('tileerror', () => {
+      failedRef.current += 1;
+      if (failedRef.current >= 6) nextSource();
+    });
+    layer.addTo(map);
+
+    /* Nothing loaded at all after 15s -> try the next Esri host. */
+    tileTimerRef.current = window.setTimeout(() => {
+      if (!loadedRef.current) nextSource();
+    }, 15000);
+  }
+
+  function nextSource() {
+    sourceIdxRef.current += 1;
+    loadedRef.current = false;
+    failedRef.current = 0;
+    window.clearTimeout(tileTimerRef.current);
+    if (sourceIdxRef.current >= SATELLITE_SOURCES.length) {
+      if (tileLayerRef.current) tileLayerRef.current.remove();
+      tileLayerRef.current = null;
+      setSatStatus('offline');
+      return;
+    }
+    setSatStatus('connecting');
+    attachTiles();
+  }
+
+  const retrySatellite = () => {
+    sourceIdxRef.current = 0;
+    loadedRef.current = false;
+    failedRef.current = 0;
+    setSatStatus('connecting');
+    attachTiles();
+  };
+
+  /* Mount: init a Leaflet map once with satellite imagery, then draw
+     the four zone polygons/labels on top of the imagery. */
   useEffect(() => {
-    if (mode !== 'satellite') return;
     const container = mapContainerRef.current;
     if (!container) return;
 
@@ -141,54 +214,13 @@ export const MineZoneMap: React.FC<MineZoneMapProps> = ({
       zoom: INITIAL_ZOOM,
       zoomControl: false,
       attributionControl: true,
-      minZoom: 10,
+      minZoom: 11,
       maxZoom: 18,
     });
     map.attributionControl?.setPrefix(false);
     map.attributionControl?.setPosition('bottomright');
 
     leafletMapRef.current = map;
-
-    let loadedTiles = 0;
-    let failedTiles = 0;
-    let demoTimer = 0;
-
-    const switchToDemo = () => {
-      window.clearTimeout(demoTimer);
-      try {
-        map.remove();
-      } catch {
-        /* noop */
-      }
-      leafletMapRef.current = null;
-      zoneLayerRef.current = [];
-      labelLayerRef.current = null;
-      zoneBoundsRef.current = null;
-      setMode((m) => (m === 'satellite' ? 'demo' : m));
-    };
-
-    const tiles = L.tileLayer(TILE_URL, {
-      maxZoom: 18,
-      attribution: TILE_ATTRIBUTION,
-      crossOrigin: true,
-    });
-    tiles.on('tileload', () => {
-      loadedTiles += 1;
-    });
-    tiles.on('tileerror', () => {
-      failedTiles += 1;
-      if (failedTiles >= 4) switchToDemo();
-    });
-    tiles.addTo(map);
-
-    /* Banner halfway across the screen, still zero tiles => offline. */
-    demoTimer = window.setTimeout(() => {
-      if (loadedTiles === 0) switchToDemo();
-    }, 8000);
-
-    /* Re-project zone polygons from the existing mockData onto the map. */
-    zoneBoundsRef.current = map.getBounds();
-    const b = map.getBounds();
 
     const paintAll = () => {
       zoneLayerRef.current.forEach((poly, i) => {
@@ -218,12 +250,7 @@ export const MineZoneMap: React.FC<MineZoneMapProps> = ({
     const zoneLayers: L.Polygon[] = [];
     mineZones.forEach((zone) => {
       const paint = ZONE_PAINT[zone.id.toUpperCase()] ?? ZONE_PAINT.ZONE_A;
-      const latLngs: [number, number][] = zone.polygon.map(([x, y]) => [
-        b.getNorth() - (y / 100) * (b.getNorth() - b.getSouth()),
-        b.getWest() + (x / 100) * (b.getEast() - b.getWest()),
-      ]);
-
-      const poly = L.polygon(latLngs, {
+      const poly = L.polygon(zone.polygon.map(toLatLng), {
         color: zone.statusColor,
         weight: paint.weight,
         opacity: 0.95,
@@ -234,7 +261,10 @@ export const MineZoneMap: React.FC<MineZoneMapProps> = ({
       });
       poly.on('mouseover', () => {
         poly.bringToFront();
-        poly.setStyle({ weight: 4, fillOpacity: ZONE_PAINT[zone.id.toUpperCase()]?.fillOpacity ?? 0.3 + 0.08 });
+        poly.setStyle({
+          weight: 4,
+          fillOpacity: (ZONE_PAINT[zone.id.toUpperCase()]?.fillOpacity ?? 0.3) + 0.08,
+        });
         setActiveHoverZone(zone);
       });
       poly.on('mouseout', () => {
@@ -246,31 +276,35 @@ export const MineZoneMap: React.FC<MineZoneMapProps> = ({
       zoneLayers.push(poly);
 
       /* Floating label marker anchored at the zone center. */
-      const [cx, cy] = zone.center;
-      const centerLatLng: [number, number] = [
-        b.getNorth() - (cy / 100) * (b.getNorth() - b.getSouth()),
-        b.getWest() + (cx / 100) * (b.getEast() - b.getWest()),
-      ];
       labelLayerRef.current = labelLayerRef.current ?? L.layerGroup().addTo(map);
-      addZoneLabel(centerLatLng, zone, labelLayerRef.current, handleZoneClick);
+      addZoneLabel(toLatLng(zone.center), zone, labelLayerRef.current, handleZoneClick);
     });
     zoneLayerRef.current = zoneLayers;
 
-    /* Keep the Leaflet canvas sharp when the dashboard reflows. */
-    let resizeTicks = 0;
-    const ro = new ResizeObserver(() => {
-      resizeTicks += 1;
-      if (resizeTicks >= 2) {
-        map.invalidateSize();
-        resizeTicks = 0;
-      } else {
-        window.setTimeout(() => map.invalidateSize(), 60);
-      }
+    /* Zoom so all four zones fit inside the card, then remember it. */
+    const fitToZones = () => {
+      if (zoneLayerRef.current.length === 0) return;
+      const bounds = L.latLngBounds([]);
+      zoneLayerRef.current.forEach((p) => bounds.extend(p.getBounds()));
+      map.fitBounds(bounds, { padding: [24, 24], maxZoom: MAX_FIT_ZOOM });
+      homeViewRef.current = { center: map.getCenter(), zoom: map.getZoom() };
+    };
+
+    /* Wait a frame so the grid container can be measured. */
+    const raf = window.requestAnimationFrame(() => {
+      map.invalidateSize();
+      fitToZones();
     });
+
+    /* Keep the Leaflet canvas sharp when the dashboard reflows. */
+    const ro = new ResizeObserver(() => map.invalidateSize());
     ro.observe(map.getContainer());
 
+    attachTiles();
+
     return () => {
-      window.clearTimeout(demoTimer);
+      window.clearTimeout(tileTimerRef.current);
+      window.cancelAnimationFrame(raf);
       ro.disconnect();
       try {
         map.remove();
@@ -278,30 +312,22 @@ export const MineZoneMap: React.FC<MineZoneMapProps> = ({
         /* noop */
       }
       leafletMapRef.current = null;
+      tileLayerRef.current = null;
       zoneLayerRef.current = [];
       labelLayerRef.current = null;
-      zoneBoundsRef.current = null;
+      homeViewRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode]);
+  }, []);
 
   /* Repaint zones + labels when the global search filter changes. */
   useEffect(() => {
     const layer = labelLayerRef.current;
     if (!layer) return;
     layer.clearLayers();
-    const b = zoneBoundsRef.current;
-    if (!b) return;
     mineZones.forEach((zone) => {
-      const [cx, cy] = zone.center;
-      const ll: [number, number] = [
-        b.getNorth() - (cy / 100) * (b.getNorth() - b.getSouth()),
-        b.getWest() + (cx / 100) * (b.getEast() - b.getWest()),
-      ];
-      addZoneLabel(ll, zone, layer, handleZoneClick);
+      addZoneLabel(toLatLng(zone.center), zone, layer, handleZoneClick);
     });
-    const map = leafletMapRef.current;
-    if (!map) return;
     zoneLayerRef.current.forEach((poly, i) => {
       const s = searchStateRef.current;
       const zone = mineZones[i];
@@ -325,11 +351,7 @@ export const MineZoneMap: React.FC<MineZoneMapProps> = ({
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchQuery, mode]);
-
-  const query = searchQuery.trim().toLowerCase();
-  const isSearching = query.length > 0;
-  const zoneAssignKey = `${mode}-${isSearching}-${query}`;
+  }, [searchQuery]);
 
   return (
     <div
@@ -362,33 +384,46 @@ export const MineZoneMap: React.FC<MineZoneMapProps> = ({
 
       {/* Map Canvas */}
       <div className="relative z-0 flex-1 min-h-[260px] sm:min-h-[310px] bg-[#1e293b] overflow-hidden group select-none">
-        {mode === 'satellite' ? (
-          /* Live Esri satellite imagery with Leaflet */
-          <div ref={mapContainerRef} className="absolute inset-0 z-0" aria-label="Satellite mine map" />
-        ) : (
-          /* Offline / tile-failure fallback: satellite-style render */
-          <DemoMineMap
-            key={zoneAssignKey}
-            zoom={demoZoom}
-            encouragePulse={false}
-            searchState={searchStateRef.current}
-            onZoneClick={handleZoneClick}
-            onZoneHover={setActiveHoverZone}
-          />
-        )}
+        {/* Live Esri World Imagery satellite view via Leaflet */}
+        <div ref={mapContainerRef} className="absolute inset-0 z-0" aria-label="Satellite mine map" />
 
-        {/* Imagery / mode badge */}
+        {/* Imagery / connection badge */}
         <div className="absolute top-2.5 right-3 z-[1100] flex items-center gap-1.5 pointer-events-none">
           <span
-            className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded backdrop-blur-xs ${
-              mode === 'satellite'
-                ? 'bg-slate-900/70 text-sky-300 border border-sky-500/40 font-mono'
-                : 'bg-orange-600/90 text-white border border-orange-400 font-mono'
+            className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded backdrop-blur-xs border border-slate-700/60 font-mono ${
+              satStatus === 'live'
+                ? 'bg-slate-900/70 text-sky-300 border-sky-500/40'
+                : satStatus === 'offline'
+                ? 'bg-orange-600/90 text-white border-orange-400'
+                : 'bg-slate-900/70 text-amber-300 border-amber-500/40'
             }`}
           >
-            {mode === 'satellite' ? '● Satellite' : 'DEMO DATA'}
+            {satStatus === 'live'
+              ? '● Satellite'
+              : satStatus === 'offline'
+              ? 'OFFLINE'
+              : '● Connecting…'}
           </span>
         </div>
+
+        {/* Offline retry panel (imagery genuinely unreachable) */}
+        {satStatus === 'offline' && (
+          <div className="absolute inset-0 z-[1100] bg-slate-950/60 backdrop-blur-[2px] flex items-center justify-center pointer-events-none">
+            <div className="flex flex-col items-center gap-2.5 bg-slate-900/95 border border-slate-700 rounded-xl px-4 py-3.5 text-center pointer-events-auto shadow-xl">
+              <p className="text-xs text-slate-300 font-medium">
+                Satellite imagery is currently unreachable
+              </p>
+              <p className="text-[10px] text-slate-500 font-mono">Esri World Imagery</p>
+              <button
+                onClick={retrySatellite}
+                className="mt-1 px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center gap-1.5"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Retry Connection</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Hover info tooltip */}
         {activeHoverZone && (
@@ -450,7 +485,11 @@ export const MineZoneMap: React.FC<MineZoneMapProps> = ({
         {/* Telemetry footer bar */}
         <div className="absolute bottom-2 left-3 text-[10px] font-mono text-slate-400 bg-slate-950/60 px-2 py-0.5 rounded backdrop-blur-xs pointer-events-none">
           GIS Telemetry: Lat 24.120°N Lon 82.682°E •{' '}
-          {mode === 'satellite' ? 'Satellite 1.2m GSD' : 'Offline Demo Render'}
+          {satStatus === 'live'
+            ? 'Satellite 1.2m GSD'
+            : satStatus === 'offline'
+            ? 'Satellite offline — reconnect'
+            : 'Connecting to satellite imagery…'}
         </div>
       </div>
 
@@ -655,228 +694,5 @@ function addZoneLabel(
   });
   layer.addLayer(marker);
 }
-
-/* ---------------------------------------------------------------
-   Fallback view: a procedurally drawn "satellite-style" render of the
-   same open-pit area. Used only when live imagery cannot load. Zone
-   polygons reuse the exact same mineZones records as the live map.
-   --------------------------------------------------------------- */
-interface DemoMineMapProps {
-  zoom: number;
-  encouragePulse?: boolean;
-  searchState: SearchState;
-  onZoneClick: (zone: MineZone) => void;
-  onZoneHover: (zone: MineZone | null) => void;
-}
-
-const DemoMineMap: React.FC<DemoMineMapProps> = ({
-  zoom,
-  searchState,
-  onZoneClick,
-  onZoneHover,
-}) => {
-  const pts = (zone: MineZone) =>
-    zone.polygon.map(([x, y]) => `${(x * 10).toFixed(1)},${(y * 6).toFixed(1)}`).join(' ');
-
-  return (
-    <div className="absolute inset-0 overflow-hidden">
-      <div
-        className="w-full h-full relative transition-transform duration-200 ease-out origin-center"
-        style={{ transform: `scale(${zoom})` }}
-      >
-        <svg
-          className="w-full h-full"
-          viewBox="0 0 1000 600"
-          preserveAspectRatio="none"
-          aria-label="Demo mine area satellite render"
-        >
-          <defs>
-            <linearGradient id="demoTerrain" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#93a376" />
-              <stop offset="55%" stopColor="#86956a" />
-              <stop offset="100%" stopColor="#7d8b63" />
-            </linearGradient>
-            <pattern id="demoFields" width="90" height="70" patternUnits="userSpaceOnUse">
-              <rect width="90" height="70" fill="#8a9a6d" opacity="0.5" />
-              <path
-                d="M 0,12 L 90,8 M 0,30 L 90,26 M 0,52 L 90,48 M 0,66 L 90,62"
-                stroke="#77875c"
-                strokeWidth="1.5"
-                opacity="0.6"
-              />
-              <path d="M 45,0 L 45,70" stroke="#6f7f57" strokeWidth="1" opacity="0.5" />
-            </pattern>
-            <radialGradient id="demoPit" cx="50%" cy="55%" r="62%">
-              <stop offset="0%" stopColor="#3c3226" />
-              <stop offset="30%" stopColor="#54432c" />
-              <stop offset="60%" stopColor="#75603d" />
-              <stop offset="85%" stopColor="#987f52" />
-              <stop offset="100%" stopColor="#ab936a" />
-            </radialGradient>
-            <radialGradient id="demoWater" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor="#25607a" stopOpacity="0.85" />
-              <stop offset="100%" stopColor="#143947" stopOpacity="0.6" />
-            </radialGradient>
-          </defs>
-
-          {/* Farmland / vegetation base */}
-          <rect width="1000" height="600" fill="url(#demoTerrain)" />
-          <rect width="1000" height="600" fill="url(#demoFields)" opacity="0.55" />
-
-          {/* Field boundary lines */}
-          <g stroke="#64754f" strokeWidth="2" opacity="0.5">
-            <path d="M 0,140 L 380,120 L 1000,150" fill="none" />
-            <path d="M 0,470 L 330,450 L 1000,480" fill="none" />
-            <path d="M 620,0 L 640,220 L 1000,240" fill="none" />
-          </g>
-
-          {/* Tree clusters */}
-          <g fill="#47613c" opacity="0.85">
-            <circle cx="70" cy="90" r="22" />
-            <circle cx="95" cy="110" r="16" />
-            <circle cx="60" cy="120" r="14" />
-            <circle cx="880" cy="70" r="18" />
-            <circle cx="905" cy="92" r="13" />
-            <circle cx="120" cy="520" r="16" />
-            <circle cx="930" cy="520" r="20" />
-          </g>
-
-          {/* Stream bed */}
-          <path
-            d="M 0,330 C 120,300 200,340 300,380 C 420,420 500,400 560,430"
-            fill="none"
-            stroke="#5f7a68"
-            strokeWidth="8"
-            opacity="0.5"
-          />
-
-          {/* Open pit stepped benches */}
-          <ellipse cx="500" cy="300" rx="460" ry="250" fill="#a9a183" opacity="0.55" />
-          <ellipse cx="492" cy="305" rx="385" ry="205" fill="url(#demoPit)" opacity="0.92" />
-          <ellipse cx="485" cy="312" rx="295" ry="152" fill="none" stroke="#5c4b30" strokeWidth="7" opacity="0.7" />
-          <ellipse cx="478" cy="320" rx="205" ry="102" fill="none" stroke="#463a26" strokeWidth="8" opacity="0.8" />
-          <ellipse cx="470" cy="328" rx="120" ry="60" fill="#3a332b" opacity="0.95" />
-
-          {/* Haul roads curling into the pit */}
-          <path
-            d="M 40,160 Q 270,205 470,262 T 800,360"
-            fill="none"
-            stroke="#cdb385"
-            strokeWidth="16"
-            strokeLinecap="round"
-            opacity="0.65"
-          />
-          <path
-            d="M 40,160 Q 270,205 470,262 T 800,360"
-            fill="none"
-            stroke="#efe3c2"
-            strokeWidth="2"
-            strokeDasharray="12,12"
-            opacity="0.6"
-          />
-          <path
-            d="M 970,215 Q 690,275 462,338 T 150,500"
-            fill="none"
-            stroke="#cdb385"
-            strokeWidth="13"
-            strokeLinecap="round"
-            opacity="0.6"
-          />
-
-          {/* Bench spiral roads inside the pit */}
-          <path
-            d="M 470,262 C 430,290 430,320 470,328"
-            fill="none"
-            stroke="#c9b085"
-            strokeWidth="10"
-            opacity="0.55"
-          />
-          <path
-            d="M 470,328 C 510,336 530,320 515,302"
-            fill="none"
-            stroke="#c9b085"
-            strokeWidth="9"
-            opacity="0.55"
-          />
-
-          {/* Pit floor water retention basin */}
-          <path
-            d="M 430,330 C 450,318 485,317 505,330 C 525,345 495,360 465,355 Z"
-            fill="url(#demoWater)"
-          />
-
-          {/* Coal stockpile + rail siding (east) */}
-          <ellipse cx="820" cy="430" rx="80" ry="45" fill="#3d3a36" opacity="0.85" />
-          <ellipse cx="820" cy="424" rx="55" ry="28" fill="#2a2825" opacity="0.9" />
-          <path
-            d="M 660,470 L 950,515 M 660,480 L 950,525 M 660,490 L 950,535"
-            stroke="#5b5b55"
-            strokeWidth="3"
-            opacity="0.8"
-          />
-          <line x1="640" y1="360" x2="880" y2="430" stroke="#d8a64e" strokeWidth="4" strokeDasharray="6,4" opacity="0.8" />
-
-          {/* 4 Interactive Zone Polygons (reuses mineZones records) */}
-          {mineZones.map((zone) => {
-            const paint = ZONE_PAINT[zone.id.toUpperCase()] ?? ZONE_PAINT.ZONE_A;
-            const dim = searchState.isSearching && !searchState.matches(zone);
-            const isHigh = zone.riskLevel === 'HIGH';
-            return (
-              <g
-                key={zone.id}
-                className="cursor-pointer transition-opacity"
-                opacity={dim ? 0.3 : 1}
-                onClick={() => onZoneClick(zone)}
-                onMouseEnter={() => onZoneHover(zone)}
-                onMouseLeave={() => onZoneHover(null)}
-              >
-                <polygon
-                  points={pts(zone)}
-                  fill={zone.statusColor}
-                  fillOpacity={paint.fillOpacity}
-                  stroke={zone.statusColor}
-                  strokeWidth={paint.weight}
-                  strokeDasharray={paint.dash}
-                  className={isHigh ? 'mzv-zone-pulse' : ''}
-                />
-              </g>
-            );
-          })}
-        </svg>
-
-        {/* Floating zone labels (same data, same styling as live map) */}
-        {mineZones.map((zone) => {
-          const dim = searchState.isSearching && !searchState.matches(zone);
-          const highlight = searchState.isSearching && searchState.matches(zone);
-          return (
-            <div
-              key={`${zone.id}-label`}
-              onClick={() => onZoneClick(zone)}
-              onMouseEnter={() => onZoneHover(zone)}
-              onMouseLeave={() => onZoneHover(null)}
-              className={`absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer transition-all${
-                highlight ? ' ring-2 ring-cyan-300 scale-110 shadow-cyan-400/50 z-10' : ''
-              }${dim ? ' opacity-30' : ''}${zone.riskLevel === 'HIGH' ? ' animate-pulse' : ''}`}
-              style={{ left: `${zone.center[0]}%`, top: `${zone.center[1]}%` }}
-            >
-              <div
-                className="flex flex-col bg-slate-900/85 hover:bg-slate-900 text-white px-2.5 py-1 rounded-lg border shadow-lg backdrop-blur-xs text-[11px] font-bold"
-                style={{ borderColor: `${zone.statusColor}66` }}
-              >
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full" style={{ background: zone.statusColor }} />
-                  {zone.code.replace('ZONE ', 'Zone ')}
-                </span>
-                <span className="text-[9px] font-medium leading-none mt-0.5" style={{ color: zone.statusColor }}>
-                  ● {STATUS_SHORT[zone.status] ?? zone.status}
-                </span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
 
 export default MineZoneMap;

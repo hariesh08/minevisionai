@@ -106,7 +106,7 @@ export const Reports: React.FC = () => {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `MineVision_${activeReportType.replace(/\s+/g, '_')}_${getRelativeDate(0, 'file')}.csv`);
+    link.setAttribute('download', `MineGuard_${activeReportType.replace(/\s+/g, '_')}_${getRelativeDate(0, 'file')}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -123,7 +123,7 @@ export const Reports: React.FC = () => {
       period: `01 September - ${getRelativeDate(0, 'full')}`,
       mine: 'Demo Coal Mine • Morning Shift A',
       overallCompliance: '92% (Tier 1 Gold)',
-      fileName: `MineVision_${activeReportType.replace(/\s+/g, '_')}_${getRelativeDate(0, 'file')}`,
+      fileName: `MineGuard_${activeReportType.replace(/\s+/g, '_')}_${getRelativeDate(0, 'file')}`,
       stats: [
         { label: 'Total Violations', value: '38' },
         { label: 'Resolved', value: '31' },

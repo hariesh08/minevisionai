@@ -554,7 +554,7 @@ export const Compliance: React.FC = () => {
                       period: getRelativeDate(0, 'full'),
                       mine: 'Morning Shift A | Certified Shift Incharge: Verma K.',
                       overallCompliance: '92% (Tier 1)',
-                      fileName: `MineVision_Compliance_Report_${getRelativeDate(0, 'file')}`,
+                      fileName: `MineGuard_Compliance_Report_${getRelativeDate(0, 'file')}`,
                       stats: [
                         { label: 'Requirements Evaluated', value: `${totalCount} Categories` },
                         { label: 'Compliant', value: `${compliantCount} Items` },

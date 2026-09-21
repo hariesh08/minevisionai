@@ -217,7 +217,7 @@ export const RecentAlerts: React.FC<RecentAlertsProps> = ({
           isOpen={showAllModal}
           onClose={() => setShowAllModal(false)}
           title="All Active Safety Alerts"
-          subtitle="Real-time incident stream from MineVision AI Computer Vision and IoT sensors"
+          subtitle="Real-time incident stream from MineGuard AI Computer Vision and IoT sensors"
           maxWidth="2xl"
           footer={
             <button

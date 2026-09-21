@@ -259,7 +259,7 @@ export const MineGuardProvider: React.FC<{ children: ReactNode }> = ({ children 
       time: '10:42 AM',
       eventType: 'AI Detection',
       description: 'AI computer vision detected worker W102 without required helmet near Loader L-04',
-      systemOrUser: 'MineVision Edge CV v2.4',
+      systemOrUser: 'MineGuard Edge CV v2.4',
       zone: 'Zone B',
       relatedViolation: 'V1023',
       worker: 'W102 (Ramesh K.)',

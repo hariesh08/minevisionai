@@ -10,7 +10,6 @@ import {
   FileText,
   Bot,
   History,
-  ShieldAlert,
   X,
 } from 'lucide-react';
 import StatusIndicator from '../common/StatusIndicator';
@@ -71,14 +70,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Brand Header */}
         <div className="px-5 py-5 border-b border-slate-800/80 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-400 p-0.5 shadow-md shadow-blue-500/20 flex items-center justify-center">
-              <div className="w-full h-full bg-[#0b132b] rounded-[10px] flex items-center justify-center">
-                <ShieldAlert className="w-5 h-5 text-cyan-400" />
-              </div>
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-400 p-0.5 shadow-md shadow-blue-500/20 flex items-center justify-center overflow-hidden">
+              <img
+                src="/favicon_io/android-chrome-512x512.png"
+                alt="MineGuard AI logo"
+                className="w-full h-full rounded-[10px] object-contain bg-[#0b132b]"
+                loading="eager"
+              />
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <span className="font-bold text-base tracking-tight text-white">MineVision</span>
+                <span className="font-bold text-base tracking-tight text-white">MineGuard</span>
                 <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">
                   AI
                 </span>

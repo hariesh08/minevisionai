@@ -79,7 +79,7 @@ export const AuditLog: React.FC = () => {
     if (selectedTypeFilter === 'Corrective Actions' && ev.eventType !== 'Corrective Action') return false;
     if (
       selectedTypeFilter === 'User Activity' &&
-      (ev.eventType === 'AI Detection' || ev.systemOrUser.includes('MineVision'))
+      (ev.eventType === 'AI Detection' || ev.systemOrUser.includes('MineGuard'))
     ) {
       return false;
     }

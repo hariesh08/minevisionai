@@ -30,7 +30,7 @@ function AppLayout() {
 
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('minevision-theme');
+      const saved = localStorage.getItem('MineGuard-theme');
       if (saved) return saved === 'dark';
     }
     return false;
@@ -38,7 +38,7 @@ function AppLayout() {
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode);
-    localStorage.setItem('minevision-theme', darkMode ? 'dark' : 'light');
+    localStorage.setItem('MineGuard-theme', darkMode ? 'dark' : 'light');
   }, [darkMode]);
 
   // Determine active tab from current URL pathname
@@ -298,7 +298,7 @@ function AIAssistantPage({ onBack }: { onBack: () => void }) {
   const [chatLog, setChatLog] = useState([
     {
       sender: 'ai',
-      text: 'Hello Safety Officer Harini N. I am MineVision AI, calibrated on DGMS circulars, CMR 2017, and live mine telemetry. Ask me anything regarding active zones, PPE detections, or statutory requirements.',
+      text: 'Hello Safety Officer Harini N. I am MineGuard AI, calibrated on DGMS circulars, CMR 2017, and live mine telemetry. Ask me anything regarding active zones, PPE detections, or statutory requirements.',
       time: '10:42 AM',
     },
   ]);
@@ -348,7 +348,7 @@ function AIAssistantPage({ onBack }: { onBack: () => void }) {
           </button>
           <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
             <Bot className="w-5 h-5 text-purple-600" />
-            <span>MineVision AI Compliance Assistant</span>
+            <span>MineGuard AI Compliance Assistant</span>
           </h1>
           <p className="text-xs text-slate-500">
             Interactive natural language assistant for coal mine safety governance and DGMS rules

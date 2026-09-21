@@ -221,7 +221,7 @@ export const RiskAI: React.FC = () => {
           </div>
 
           <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-            <span>Model: MineVision XGBoost-Ensemble</span>
+            <span>Model: MineGuard XGBoost-Ensemble</span>
             <span className="font-mono text-purple-600 font-bold">Accuracy: 94.8%</span>
           </div>
         </div>

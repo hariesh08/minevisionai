@@ -300,7 +300,7 @@ export const recentAlerts: SafetyAlert[] = [
     severity: 'LOW',
     category: 'Inspection',
     description: 'Bi-weekly DGMS statutory conveyor fire hydrant and emergency trip wire audit due by 14:00.',
-    actionRequired: 'Safety officer Harini N to complete digital audit checklist in MineVision AI.',
+    actionRequired: 'Safety officer Harini N to complete digital audit checklist in MineGuard AI.',
     status: 'Active',
   },
 ];
@@ -342,7 +342,7 @@ export const recentViolations: ViolationRecord[] = [
     workerId: 'W102',
     workerName: 'Ramesh K. (Drill Operator)',
     camera: 'ZONE B - CAM 01',
-    reportedBy: 'MineVision Computer Vision v2.4',
+    reportedBy: 'MineGuard Computer Vision v2.4',
     notes: 'Worker removed helmet while servicing hydraulic coupler near rear tracks.',
     actionTaken: 'Audio siren triggered. Safety marshal notified via handheld terminal.',
   },
@@ -384,7 +384,7 @@ export const recentViolations: ViolationRecord[] = [
     workerId: 'W144',
     workerName: 'Vikram S. (Siding Attendant)',
     camera: 'ZONE D - CAM 02',
-    reportedBy: 'MineVision Camera Feeds v2.4',
+    reportedBy: 'MineGuard Camera Feeds v2.4',
     notes: 'High-visibility vest unzipped and retro-reflective strip obscured.',
     actionTaken: 'Resolved immediately on verbal reminder by Shift Supervisor.',
   },
@@ -424,12 +424,12 @@ export const aiComplianceQA = [
   {
     question: "Show today's violations",
     answer:
-      "Today, MineVision AI registered 4 key violations: 1) 10:42 AM - No Helmet in Zone B (Open, High); 2) 11:17 AM - Restricted Zone Entry in Zone A (Open, High); 3) 12:05 PM - Dust spike in Zone C (Investigating, Medium); 4) 12:30 PM - PPE Issue in Zone D (Resolved, Low). 2 violations require immediate officer sign-off.",
+      "Today, MineGuard AI registered 4 key violations: 1) 10:42 AM - No Helmet in Zone B (Open, High); 2) 11:17 AM - Restricted Zone Entry in Zone A (Open, High); 3) 12:05 PM - Dust spike in Zone C (Investigating, Medium); 4) 12:30 PM - PPE Issue in Zone D (Resolved, Low). 2 violations require immediate officer sign-off.",
   },
   {
     question: 'Generate safety report',
     answer:
-      'MineVision AI has synthesized the shift safety audit report: Overall Mine Compliance: 92%. Active Workers: 218. Zero fatal lost-time injuries (LTI) in the last 418 days. High-priority recommendations: Deploy water cannons in Zone C and mandate PPE refresher in Zone B.',
+      'MineGuard AI has synthesized the shift safety audit report: Overall Mine Compliance: 92%. Active Workers: 218. Zero fatal lost-time injuries (LTI) in the last 418 days. High-priority recommendations: Deploy water cannons in Zone C and mandate PPE refresher in Zone B.',
   },
   {
     question: 'What is the standard DGMS guideline for coal dust suppression?',

@@ -281,7 +281,7 @@ export const LiveCCTV: React.FC<LiveCCTVProps> = ({ onViewViolation }) => {
         <Modal
           isOpen={violationModalOpen}
           onClose={() => setViolationModalOpen(false)}
-          title="MineVision Inspection - Incident #V-101"
+          title="MineGuard Inspection - Incident #V-101"
           subtitle="Real-time Computer Vision Edge Analytics • Frame Analysis"
           maxWidth="2xl"
           footer={

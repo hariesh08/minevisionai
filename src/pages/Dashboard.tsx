@@ -157,7 +157,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigateTab, searchFilte
             setReportModalOpen(false);
             setReportGenerated(false);
           }}
-          title="MineVision AI Shift Governance Report"
+          title="MineGuard AI Shift Governance Report"
           subtitle="Statutory Safety Inspection & DGMS CMR 2017 Audit"
           footer={
             <div className="flex items-center justify-between w-full">
@@ -178,12 +178,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigateTab, searchFilte
                   <button
                     onClick={() => {
                       downloadPdf({
-                        title: 'MineVision AI Shift Governance Report',
+                        title: 'MineGuard AI Shift Governance Report',
                         subtitle: 'Statutory Safety Inspection & DGMS CMR 2017 Audit',
                         period: getRelativeDate(0, 'full'),
                         mine: 'Pit #3 Northern Block, Singrauli Coalfield | Morning Shift A (06:00 - 14:00)',
                         overallCompliance: '92% (Tier 1 Gold)',
-                        fileName: `MineVision_Safety_Report_${getRelativeDate(0, 'file')}`,
+                        fileName: `MineGuard_Safety_Report_${getRelativeDate(0, 'file')}`,
                         stats: [
                           { label: 'Total Workers', value: '245 Verified' },
                           { label: 'Compliance', value: '92% Tier 1' },

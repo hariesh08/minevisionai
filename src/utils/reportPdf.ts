@@ -75,7 +75,7 @@ export function downloadPdf(options: ReportPdfOptions): void {
     doc.setTextColor(255, 255, 255);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(16);
-    doc.text('MineVision AI', MARGIN, 12);
+    doc.text('MineGuard AI', MARGIN, 12);
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
@@ -238,7 +238,7 @@ export function downloadPdf(options: ReportPdfOptions): void {
     doc.setFontSize(7.5);
     doc.setTextColor(...SLATE);
     doc.text(
-      'Digitally prepared by MineVision AI - tamper-evident DGMS audit trail. Compliance data is simulated for demonstration.',
+      'Digitally prepared by MineGuard AI - tamper-evident DGMS audit trail. Compliance data is simulated for demonstration.',
       MARGIN,
       pageHeight - 13.5
     );

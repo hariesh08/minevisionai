@@ -32,7 +32,7 @@ export const AIComplianceAssistant: React.FC<AIComplianceAssistantProps> = ({
     {
       id: 'msg-0',
       sender: 'ai',
-      text: 'Hello Safety Officer Harini. I am MineVision AI, your safety compliance assistant. Ask me anything regarding active zones, PPE detections, dust telemetry, or DGMS regulations.',
+      text: 'Hello Safety Officer Harini. I am MineGuard AI, your safety compliance assistant. Ask me anything regarding active zones, PPE detections, dust telemetry, or DGMS regulations.',
       timestamp: '10:42 AM',
     },
   ]);
@@ -135,7 +135,7 @@ export const AIComplianceAssistant: React.FC<AIComplianceAssistantProps> = ({
         <Modal
           isOpen={chatOpen}
           onClose={() => setChatOpen(false)}
-          title="MineVision AI Compliance Assistant"
+          title="MineGuard AI Compliance Assistant"
           subtitle="Trained on DGMS Circulars, CMR 2017 & Real-Time Coal Mine Telemetry"
           maxWidth="2xl"
           footer={
